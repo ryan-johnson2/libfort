@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(libfort VERSION 0.2.3)
+project(libfort VERSION 0.4.2)
 
 string(REGEX REPLACE "([0-9]+)\\.([0-9]+)\\.([0-9]+)"
     "\\1.\\2" libfort_SOVERSION
@@ -15,6 +15,7 @@ include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)
 option(FORT_ENABLE_ASTYLE "Enable astyle" OFF)
 option(FORT_ENABLE_WCHAR "Enable wchar support" ON)
 option(FORT_ENABLE_UTF8 "Enable utf8 support" ON)
+option(FORT_ENABLE_TESTING "Enables building tests and examples" ON)
 set(FORT_BUILD_TYPE "common" CACHE STRING "Build type")
 
 set_property(CACHE FORT_BUILD_TYPE PROPERTY STRINGS
@@ -155,9 +156,11 @@ set(FORT_HAVE_UTF8 "${FORT_ENABLE_UTF8}" CACHE STRING "fort option")
 # ------------------------------------------------------------------------------
 
 add_subdirectory(lib)
-add_subdirectory(src)
-add_subdirectory(tests)
-add_subdirectory(examples)
+if(FORT_ENABLE_TESTING)
+    add_subdirectory(src)
+    add_subdirectory(tests)
+    add_subdirectory(examples)
+endif()
 
 
 # ------------------------------------------------------------------------------
@@ -176,10 +179,11 @@ add_custom_target(headers SOURCES ${FortHeaders})
 # ------------------------------------------------------------------------------
 # Set preprocessor macros for all test builds.
 # ------------------------------------------------------------------------------
-
-target_compile_definitions(${PROJECT_NAME}_test_dev PRIVATE FT_TEST_BUILD=1)
-target_compile_definitions(${PROJECT_NAME}_test_cpp PRIVATE FT_TEST_BUILD=1)
-target_compile_definitions(${PROJECT_NAME}_test PRIVATE FT_TEST_BUILD=1)
+if(FORT_ENABLE_TESTING)
+    target_compile_definitions(${PROJECT_NAME}_test_dev PRIVATE FT_TEST_BUILD=1)
+    target_compile_definitions(${PROJECT_NAME}_test_cpp PRIVATE FT_TEST_BUILD=1)
+    target_compile_definitions(${PROJECT_NAME}_test PRIVATE FT_TEST_BUILD=1)
+endif()
 
 # ------------------------------------------------------------------------------
 # Setup text formatting via astyle.
@@ -220,8 +224,10 @@ if(FORT_ENABLE_ASTYLE)
         --min-conditional-indent=0
         --indent=spaces=4
         ${CMAKE_SOURCE_DIR}/lib/*.h
+        ${CMAKE_SOURCE_DIR}/lib/*.hpp
         ${CMAKE_SOURCE_DIR}/lib/*.c
         ${CMAKE_SOURCE_DIR}/src/*.h
+        ${CMAKE_SOURCE_DIR}/src/*.hpp
         ${CMAKE_SOURCE_DIR}/src/*.c
         ${CMAKE_SOURCE_DIR}/tests/*.c
         ${CMAKE_SOURCE_DIR}/tests/*.h
@@ -250,11 +256,21 @@ endif()
 # ------------------------------------------------------------------------------
 # Add examples and unit tests to ctest driver.
 # ------------------------------------------------------------------------------
+if(FORT_ENABLE_TESTING)
+    enable_testing()
+    list(APPEND ${PROJECT_NAME}_ctests
+        ${${PROJECT_NAME}_tests}
+        ${${PROJECT_NAME}_examples})
+    foreach(exe ${${PROJECT_NAME}_ctests})
+        add_test(NAME ${exe} COMMAND ${exe})
+    endforeach()
+endif()
 
-enable_testing()
-list(APPEND ${PROJECT_NAME}_ctests
-    ${${PROJECT_NAME}_tests}
-    ${${PROJECT_NAME}_examples})
-foreach(exe ${${PROJECT_NAME}_ctests})
-    add_test(NAME ${exe} COMMAND ${exe})
-endforeach()
+# ------------------------------------------------------------------------------
+# Exported targets for outer applications.
+# ------------------------------------------------------------------------------
+export(
+    TARGETS fort
+    FILE ${PROJECT_NAME}-targets.cmake
+)
+

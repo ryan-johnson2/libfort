@@ -3,7 +3,7 @@ libfort
 
 MIT License
 
-Copyright (c) 2017 - 2018 Seleznev Anton
+Copyright (c) 2017 - 2020 Seleznev Anton
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -34,9 +34,11 @@ SOFTWARE.
 #ifndef LIBFORT_HPP
 #define LIBFORT_HPP
 
+#include <iomanip>
+#include <sstream>
 #include <string>
 #include <stdexcept>
-#include <sstream>
+#include <type_traits>
 
 #include "fort.h"
 
@@ -58,6 +60,17 @@ enum class text_align {
 enum class row_type {
     common = FT_ROW_COMMON,
     header = FT_ROW_HEADER
+};
+
+/**
+ * Adding strategy.
+ *
+ * Determines what happens with old content if current cell is not empty after
+ * adding data to it. Default strategy is 'replace'.
+ */
+enum class add_strategy {
+    replace = FT_STRATEGY_REPLACE,
+    insert  = FT_STRATEGY_INSERT
 };
 
 /**
@@ -97,18 +110,28 @@ enum class text_style {
     hidden        = FT_TSTYLE_HIDDEN
 };
 
+
+enum class table_type {
+    character,
+#ifdef FT_HAVE_UTF8
+    utf8
+#endif /* FT_HAVE_UTF8 */
+};
+
 /**
  * Table manipulator.
  *
  * Table manipulators can be used to change current cell and change appearance
  * of cells.
  */
-class table_manipulator {
+class table_manipulator
+{
 public:
     explicit table_manipulator(int i)
-        :value(i)
+        : value(i)
     {
     }
+    template <table_type TT>
     friend class table;
 private:
     int value;
@@ -129,6 +152,39 @@ const table_manipulator endr(1);
  */
 const table_manipulator separator(2);
 
+// Utility functions for internal library usage.
+namespace detail
+{
+template <typename T>
+constexpr bool is_stream_manipulator_impl() noexcept
+{
+    using Tdec = typename std::decay<T>::type;
+    // Manipulators for integral types
+    return std::is_same<Tdec, typename std::decay<decltype(std::dec)>::type>::value
+           || std::is_same<Tdec, typename std::decay<decltype(std::hex)>::type>::value
+           || std::is_same<Tdec, typename std::decay<decltype(std::oct)>::type>::value
+           // Floating-point manipulators
+           || std::is_same<Tdec, typename std::decay<decltype(std::fixed)>::type>::value
+           || std::is_same<Tdec, typename std::decay<decltype(std::scientific)>::type>::value
+           // Misc
+           || std::is_same<Tdec, typename std::decay<decltype(std::setbase(0))>::type>::value
+           || std::is_same<Tdec, typename std::decay<decltype(std::setfill('\0'))>::type>::value
+           || std::is_same<Tdec, typename std::decay<decltype(std::setprecision(0))>::type>::value
+           || std::is_same<Tdec, typename std::decay<decltype(std::setw(0))>::type>::value;
+}
+}
+
+/**
+ * Utility function that is used internally by the library to check if argument
+ * passed to operator<< is a manipulator. In case default behaviour is not
+ * enough write custom specialization of this function.
+ */
+template <typename T>
+constexpr bool is_stream_manipulator() noexcept
+{
+    return detail::is_stream_manipulator_impl<T>();
+}
+
 /**
  * Property owner.
  *
@@ -136,11 +192,12 @@ const table_manipulator separator(2);
  * which user can specify properties.
  */
 template <typename table>
-class property_owner {
+class property_owner
+{
 public:
 
     property_owner(std::size_t row_idx, std::size_t coll_idx, table *tbl, bool def = false)
-        :ps_row_idx_(row_idx), ps_coll_idx_(coll_idx),
+        : ps_row_idx_(row_idx), ps_coll_idx_(coll_idx),
           ps_table_(tbl), set_default_properties_(def) {}
 
     /**
@@ -166,7 +223,7 @@ public:
      *   - true: Success; cell property was changed.
      *   - false: In case of error
      */
-    bool set_cell_text_align(enum fort::text_align value)
+    bool set_cell_text_align(fort::text_align value)
     {
         return set_property(FT_CPROP_TEXT_ALIGN, static_cast<int>(value));
     }
@@ -236,7 +293,7 @@ public:
      *   - true: Success; cell property was changed.
      *   - false: In case of error.
      */
-    bool set_cell_row_type(enum fort::row_type value)
+    bool set_cell_row_type(fort::row_type value)
     {
         return set_property(FT_CPROP_ROW_TYPE, static_cast<int>(value));
     }
@@ -264,7 +321,7 @@ public:
      *   - true: Success; cell property was changed.
      *   - false: In case of error.
      */
-    bool set_cell_content_fg_color(enum fort::color value)
+    bool set_cell_content_fg_color(fort::color value)
     {
         return set_property(FT_CPROP_CONT_FG_COLOR, static_cast<int>(value));
     }
@@ -278,7 +335,7 @@ public:
      *   - true: Success; cell property was changed.
      *   - false: In case of error.
      */
-    bool set_cell_bg_color(enum fort::color value)
+    bool set_cell_bg_color(fort::color value)
     {
         return set_property(FT_CPROP_CELL_BG_COLOR, static_cast<int>(value));
     }
@@ -292,7 +349,7 @@ public:
      *   - true: Success; cell property was changed.
      *   - false: In case of error.
      */
-    bool set_cell_content_bg_color(enum fort::color value)
+    bool set_cell_content_bg_color(fort::color value)
     {
         return set_property(FT_CPROP_CONT_BG_COLOR, static_cast<int>(value));
     }
@@ -306,7 +363,7 @@ public:
      *   - true: Success; cell property was changed.
      *   - false: In case of error.
      */
-    bool set_cell_text_style(enum fort::text_style value)
+    bool set_cell_text_style(fort::text_style value)
     {
         return set_property(FT_CPROP_CELL_TEXT_STYLE, static_cast<int>(value));
     }
@@ -320,7 +377,7 @@ public:
      *   - true: Success; cell property was changed.
      *   - false: In case of error.
      */
-    bool set_cell_content_text_style(enum fort::text_style value)
+    bool set_cell_content_text_style(fort::text_style value)
     {
         return set_property(FT_CPROP_CONT_TEXT_STYLE, static_cast<int>(value));
     }
@@ -343,23 +400,34 @@ protected:
     }
 };
 
+
 /**
  * Formatted table.
  *
- * Table class is a C++ wrapper around struct ft_table.
+ * Table template class is a C++ wrapper around struct {@link ft_table}.
+ * Template parameter is {@link table_type}. Useful instantiations of table
+ * template class are {@link char_table} and {@link utf8_table}.
  */
-class table: public property_owner<table> {
+template <table_type TT = table_type::character>
+class table: public property_owner<table<TT>>
+{
+    /**
+     *  Utility types.
+     */
+    using table_t = table<TT>;
+    using property_owner_t = property_owner<table_t>;
+
 public:
 
     /**
      * Default constructor.
      */
     table()
-        :property_owner(FT_ANY_ROW, FT_ANY_COLUMN, this), table_(ft_create_table())
+        : property_owner_t(FT_ANY_ROW, FT_ANY_COLUMN, this),
+          table_(ft_create_table())
     {
-
         if (table_ == NULL)
-            throw std::runtime_error("Libfort runtime error");
+            throw std::bad_alloc();
     }
 
     /**
@@ -373,13 +441,13 @@ public:
     /**
      * Copy contstructor.
      */
-    table(const table& tbl)
-        :property_owner(FT_ANY_ROW, FT_ANY_COLUMN, this), table_(NULL)
+    table(const table &tbl)
+        : property_owner_t(FT_ANY_ROW, FT_ANY_COLUMN, this), table_(NULL)
     {
         if (tbl.table_) {
             ft_table_t *table_copy = ft_copy_table(tbl.table_);
             if (table_copy == NULL)
-                throw std::runtime_error("Libfort runtime error");
+                throw std::runtime_error("Error during table copy");
 
             stream_.str(std::string());
             if (tbl.stream_.tellp() >= 0) {
@@ -392,8 +460,8 @@ public:
     /**
      * Move contstructor.
      */
-    table(table&& tbl)
-        :property_owner(FT_ANY_ROW, FT_ANY_COLUMN, this), table_(tbl.table_)
+    table(table &&tbl)
+        : property_owner_t(FT_ANY_ROW, FT_ANY_COLUMN, this), table_(tbl.table_)
     {
         if (tbl.stream_.tellp() >= 0) {
             stream_ << tbl.stream_.str();
@@ -405,7 +473,7 @@ public:
     /**
      * Copy assignment operator.
      */
-    table& operator=(const table& tbl)
+    table &operator=(const table &tbl)
     {
         if (&tbl == this)
             return *this;
@@ -413,7 +481,7 @@ public:
         if (tbl.table_) {
             ft_table_t *table_copy = ft_copy_table(tbl.table_);
             if (table_copy == NULL)
-                throw std::runtime_error("Libfort runtime error");
+                throw std::runtime_error("Error during table copy");
 
             stream_.str(std::string());
             if (tbl.stream_.tellp() >= 0) {
@@ -428,7 +496,7 @@ public:
     /**
      * Move assignment operator.
      */
-    table& operator=(table&& tbl)
+    table &operator=(table &&tbl)
     {
         if (&tbl == this)
             return *this;
@@ -455,9 +523,9 @@ public:
      */
     std::string to_string() const
     {
-        const char *str = ft_to_string(table_);
+        const char *str = c_str();
         if (str == NULL)
-            throw std::runtime_error("Libfort runtime error");
+            throw std::runtime_error("Error during table to string conversion");
         return str;
     }
 
@@ -478,7 +546,13 @@ public:
      */
     const char *c_str() const
     {
+#ifdef FT_HAVE_UTF8
+        return (TT == table_type::character)
+               ? ft_to_string(table_)
+               : (const char *)ft_to_u8string(table_);
+#else
         return ft_to_string(table_);
+#endif
     }
 
     /**
@@ -495,9 +569,19 @@ public:
     template <typename T>
     table &operator<<(const T &arg)
     {
+        constexpr bool is_manip = fort::is_stream_manipulator<typename std::decay<T>::type>();
         stream_ << arg;
-        if (stream_.tellp() >= 0) {
+        if (stream_.tellp() >= 0 && !is_manip) {
+#ifdef FT_HAVE_UTF8
+            if (TT == table_type::character) {
+                ft_nwrite(table_, 1, stream_.str().c_str());
+            } else {
+                ft_u8nwrite(table_, 1, (const void *)stream_.str().c_str());
+            }
+#else
             ft_nwrite(table_, 1, stream_.str().c_str());
+#endif
+
             stream_.str(std::string());
         }
         return *this;
@@ -527,7 +611,15 @@ public:
      */
     bool write(const char *str)
     {
+#ifdef FT_HAVE_UTF8
+        if (TT == table_type::character) {
+            return FT_IS_SUCCESS(ft_write(table_, str));
+        } else {
+            return FT_IS_SUCCESS(ft_u8write(table_, (const void *)str));
+        }
+#else
         return FT_IS_SUCCESS(ft_write(table_, str));
+#endif
     }
 
     /**
@@ -544,7 +636,15 @@ public:
      */
     bool write_ln(const char *str)
     {
+#ifdef FT_HAVE_UTF8
+        if (TT == table_type::character) {
+            return FT_IS_SUCCESS(ft_write_ln(table_, str));
+        } else {
+            return FT_IS_SUCCESS(ft_u8write_ln(table_, str));
+        }
+#else
         return FT_IS_SUCCESS(ft_write_ln(table_, str));
+#endif
     }
 
     /**
@@ -839,6 +939,22 @@ public:
     {
         return FT_IS_SUCCESS(ft_set_tbl_prop(table_, FT_TPROP_BOTTOM_MARGIN, value));
     }
+
+    /**
+     * Set table adding strategy.
+     *
+     * @param value
+     *   Adding strategy.
+     * @return
+     *   - true: Success; table property was changed.
+     *   - false: In case of error.
+     */
+    bool set_adding_strategy(fort::add_strategy value)
+    {
+        return FT_IS_SUCCESS(ft_set_tbl_prop(table_,
+                                             FT_TPROP_ADDING_STRATEGY,
+                                             static_cast<int>(value)));
+    }
 private:
     ft_table_t *table_;
     mutable std::stringstream stream_;
@@ -853,20 +969,24 @@ public:
     /**
      * Table cell.
      */
-    class table_cell: public property_owner<table>
+    class table_cell: public property_owner_t
     {
+        using property_owner_t::ps_coll_idx_;
+        using property_owner_t::ps_row_idx_;
+        using property_owner_t::ps_table_;
+        using property_owner_t::set_default_properties_;
     public:
         table_cell(std::size_t row_idx, std::size_t coll_idx, table &tbl)
-            :property_owner(row_idx, coll_idx, &tbl) {}
+            : property_owner_t(row_idx, coll_idx, &tbl) {}
 
-        table_cell& operator=(const char *str)
+        table_cell &operator=(const char *str)
         {
             ft_set_cur_cell(ps_table_->table_, ps_row_idx_, ps_coll_idx_);
             ps_table_->write(str);
             return *this;
         }
 
-        table_cell& operator=(const std::string &str)
+        table_cell &operator=(const std::string &str)
         {
             return operator=(str.c_str());
         }
@@ -892,38 +1012,96 @@ public:
     /**
      * Table row.
      */
-    class table_row: public property_owner<table>
+    class table_row: public property_owner_t
     {
+        using property_owner_t::ps_row_idx_;
+        using property_owner_t::ps_table_;
     public:
         table_row(std::size_t row_idx, table &tbl)
-            :property_owner(row_idx, FT_ANY_COLUMN, &tbl) {}
+            : property_owner_t(row_idx, FT_ANY_COLUMN, &tbl) {}
 
         class table_cell
-        operator[](std::size_t coll_idx)
+            operator[](std::size_t coll_idx)
         {
             return table_cell(ps_row_idx_, coll_idx, *ps_table_);
+        }
+
+        void erase()
+        {
+            if (FT_IS_ERROR(ft_erase_range(ps_table_->table_,
+                                           property_owner_t::ps_row_idx_, 0,
+                                           property_owner_t::ps_row_idx_, FT_MAX_COL_INDEX))) {
+                throw std::runtime_error("Failed to erase row");
+            }
         }
     };
 
     /**
      * Table column.
      */
-    class table_column: public property_owner<table>
+    class table_column: public property_owner_t
     {
+        using property_owner_t::ps_coll_idx_;
+        using property_owner_t::ps_table_;
     public:
         table_column(std::size_t col_idx, table &tbl)
-            :property_owner(FT_ANY_ROW, col_idx, &tbl) {}
+            : property_owner_t(FT_ANY_ROW, col_idx, &tbl) {}
+
+        void erase()
+        {
+            if (FT_IS_ERROR(ft_erase_range(ps_table_->table_,
+                                           0, ps_coll_idx_,
+                                           FT_MAX_ROW_INDEX, ps_coll_idx_))) {
+                throw std::runtime_error("Failed to erase column");
+            }
+        }
     };
 
-    class default_properties: public property_owner<table>
+    /**
+     * Range of cells.
+     *
+     * @note: at the moment function of propery owener will work only on the
+     * top left cell.
+     * @todo: Implement their work on the whole range.
+     */
+    class cell_range: public property_owner_t
+    {
+        using property_owner_t::ps_coll_idx_;
+        using property_owner_t::ps_row_idx_;
+        using property_owner_t::ps_table_;
+    public:
+        cell_range(size_t top_left_row, size_t top_left_col,
+                   size_t bottom_right_row, size_t bottom_right_col,
+                   table &tbl)
+            : property_owner_t(top_left_row, top_left_col, &tbl),
+              bottom_right_row_(bottom_right_row),
+              bottom_right_col_(bottom_right_col)
+        {}
+
+        void erase()
+        {
+            if (FT_IS_ERROR(ft_erase_range(ps_table_->table_,
+                                           ps_row_idx_, ps_coll_idx_,
+                                           bottom_right_row_, bottom_right_col_))) {
+                throw std::runtime_error("Failed to erase column");
+            }
+        }
+
+    private:
+        std::size_t bottom_right_row_;
+        std::size_t bottom_right_col_;
+    };
+
+
+    class default_properties: public property_owner_t
     {
     public:
         default_properties(table *tbl)
-            :property_owner(FT_ANY_ROW, FT_ANY_COLUMN, tbl, true) {}
+            : property_owner_t(FT_ANY_ROW, FT_ANY_COLUMN, tbl, true) {}
     };
 
     class table_row
-    operator[](std::size_t row_idx)
+        operator[](std::size_t row_idx)
     {
         return table_row(row_idx, *this);
     }
@@ -940,7 +1118,7 @@ public:
      *   table_cell object.
      */
     class table_cell
-    cell(std::size_t row_idx, std::size_t col_idx)
+        cell(std::size_t row_idx, std::size_t col_idx)
     {
         return (*this)[row_idx][col_idx];
     }
@@ -952,7 +1130,7 @@ public:
      *   Column number of the current cell.
      */
     size_t
-    cur_col()
+    cur_col() const noexcept
     {
         return ft_cur_col(table_);
     }
@@ -964,9 +1142,34 @@ public:
      *   Row number of the current cell.
      */
     size_t
-    cur_row()
+    cur_row() const noexcept
     {
         return ft_cur_row(table_);
+    }
+
+    /**
+     * Check if table is empty.
+     *
+     * @return
+     *   true - table is empty
+     *   false - some data has been inserted
+     */
+    bool
+    is_empty() const noexcept
+    {
+        return ft_is_empty(table_);
+    }
+
+    /**
+     * Get number of rows in the table.
+     *
+     * @return
+     *   Number of rows in the table.
+     */
+    std::size_t
+    row_count() const noexcept
+    {
+        return ft_row_count(table_);
     }
 
     /**
@@ -976,7 +1179,7 @@ public:
      *   Current cell.
      */
     class table_cell
-    cur_cell()
+        cur_cell()
     {
         return cell(cur_row(), cur_col());
     }
@@ -990,7 +1193,7 @@ public:
      *   table_row object.
      */
     class table_row
-    row(std::size_t row_idx)
+        row(std::size_t row_idx)
     {
         return table_row(row_idx, *this);
     }
@@ -1004,18 +1207,50 @@ public:
      *   table_column object.
      */
     class table_column
-    column(std::size_t col_idx)
+        column(std::size_t col_idx)
     {
         return table_column(col_idx, *this);
     }
 
+    /**
+     * Get range of cells.
+     *
+     * @param col_idx
+     *   Column index.
+     * @return
+     *   table_column object.
+     */
+    class cell_range
+        range(std::size_t top_left_row, std::size_t top_left_col,
+              std::size_t bottom_right_row, std::size_t bottom_right_col)
+    {
+        return cell_range(top_left_row, top_left_col,
+                          bottom_right_row, bottom_right_col,
+                          *this);
+    }
+
     static class default_properties
-    default_props()
+        default_props()
     {
         return default_properties(NULL);
     }
 };
 
+/**
+ * Formatted table containing common char content.
+ *
+ * Content of the table is treated as a string where each byte represesents a
+ * character. Should work for ascii characters. In case of usage of different
+ * international symbols it is recommended to use {@link utf8_table}.
+ */
+using char_table = table<table_type::character>;
+
+#ifdef FT_HAVE_UTF8
+/**
+ * Formatted table containing utf-8 content.
+ */
+using utf8_table = table<table_type::utf8>;
+#endif
 
 /**
  * Set default border style for all new formatted tables.
@@ -1032,6 +1267,6 @@ inline bool set_default_border_style(struct ft_border_style *style)
 }
 
 
-}
+} // namespace fort
 
 #endif // LIBFORT_HPP

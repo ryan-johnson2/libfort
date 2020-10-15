@@ -40,7 +40,7 @@ f_row_t *get_row_impl(ft_table_t *table, size_t row, enum f_get_policy policy)
     switch (policy) {
         case DONT_CREATE_ON_NULL:
             if (row < vector_size(table->rows)) {
-                return *(f_row_t **)vector_at(table->rows, row);
+                return VECTOR_AT(table->rows, row, f_row_t *);
             }
             return NULL;
         case CREATE_ON_NULL:
@@ -53,7 +53,7 @@ f_row_t *get_row_impl(ft_table_t *table, size_t row, enum f_get_policy policy)
                     return NULL;
                 }
             }
-            return *(f_row_t **)vector_at(table->rows, row);
+            return VECTOR_AT(table->rows, row, f_row_t *);
     }
 
     assert(0 && "Shouldn't be here!");
@@ -81,7 +81,6 @@ f_row_t *get_row_and_create_if_not_exists(ft_table_t *table, size_t row)
     return get_row_impl(table, row, CREATE_ON_NULL);
 }
 
-
 FT_INTERNAL
 f_string_buffer_t *get_cur_str_buffer_and_create_if_not_exists(ft_table_t *table)
 {
@@ -90,7 +89,21 @@ f_string_buffer_t *get_cur_str_buffer_and_create_if_not_exists(ft_table_t *table
     f_row_t *row = get_row_and_create_if_not_exists(table, table->cur_row);
     if (row == NULL)
         return NULL;
-    f_cell_t *cell = get_cell_and_create_if_not_exists(row, table->cur_col);
+
+    f_cell_t *cell = NULL;
+    fort_entire_table_properties_t *table_props = &table->properties->entire_table_properties;
+    switch (table_props->add_strategy) {
+        case FT_STRATEGY_INSERT:
+            cell = create_cell_in_position(row, table->cur_col);
+            break;
+        case FT_STRATEGY_REPLACE:
+            cell = get_cell_and_create_if_not_exists(row, table->cur_col);
+            break;
+        default:
+            assert(0 && "Unexpected situation inside libfort");
+            break;
+    }
+
     if (cell == NULL)
         return NULL;
 
@@ -110,7 +123,7 @@ f_status get_table_sizes(const ft_table_t *table, size_t *rows, size_t *cols)
         *rows = vector_size(table->rows);
         size_t row_index = 0;
         for (row_index = 0; row_index < vector_size(table->rows); ++row_index) {
-            f_row_t *row = *(f_row_t **)vector_at(table->rows, row_index);
+            f_row_t *row = VECTOR_AT(table->rows, row_index, f_row_t *);
             size_t cols_in_row = columns_in_row(row);
             if (cols_in_row > *cols)
                 *cols = cols_in_row;
@@ -127,9 +140,10 @@ f_status table_rows_and_cols_geometry(const ft_table_t *table,
                                       enum f_geometry_type geom)
 {
     if (table == NULL) {
-        return FT_ERROR;
+        return FT_GEN_ERROR;
     }
 
+    size_t max_invis_codepoints = 0;
     size_t cols = 0;
     size_t rows = 0;
     int status = get_table_sizes(table, &rows, &cols);
@@ -141,7 +155,7 @@ f_status table_rows_and_cols_geometry(const ft_table_t *table,
     if (col_width_arr == NULL || row_height_arr == NULL) {
         F_FREE(col_width_arr);
         F_FREE(row_height_arr);
-        return FT_ERROR;
+        return FT_GEN_ERROR;
     }
 
     int combined_cells_found = 0;
@@ -159,7 +173,7 @@ f_status table_rows_and_cols_geometry(const ft_table_t *table,
             if (cell) {
                 switch (get_cell_type(cell)) {
                     case COMMON_CELL:
-                        col_width_arr[col] = MAX(col_width_arr[col], hint_width_cell(cell, &context, geom));
+                        col_width_arr[col] = MAX(col_width_arr[col], cell_vis_width(cell, &context));
                         break;
                     case GROUP_MASTER_CELL:
                         combined_cells_found = 1;
@@ -178,6 +192,21 @@ f_status table_rows_and_cols_geometry(const ft_table_t *table,
                 }
             }
         }
+
+        if (geom == INTERN_REPR_GEOMETRY) {
+            max_invis_codepoints = 0;
+            for (row = 0; row < rows; ++row) {
+                const f_row_t *row_p = get_row_c(table, row);
+                const f_cell_t *cell = get_cell_c(row_p, col);
+                if (!cell)
+                    continue;
+                context.column = col;
+                context.row = row;
+                size_t inv_codepoints = cell_invis_codes_width(cell, &context);
+                max_invis_codepoints = MAX(max_invis_codepoints, inv_codepoints);
+            }
+            col_width_arr[col] += max_invis_codepoints;
+        }
     }
 
     if (combined_cells_found) {
@@ -190,7 +219,10 @@ f_status table_rows_and_cols_geometry(const ft_table_t *table,
                 context.row = row;
                 if (cell) {
                     if (get_cell_type(cell) == GROUP_MASTER_CELL) {
-                        size_t hint_width = hint_width_cell(cell, &context, geom);
+                        size_t hint_width = cell_vis_width(cell, &context);
+                        if (geom == INTERN_REPR_GEOMETRY) {
+                            hint_width += cell_invis_codes_width(cell, &context);
+                        }
                         size_t slave_col = col + group_cell_number(row_p, col);
                         size_t cur_adj_col = col;
                         size_t group_width = col_width_arr[col];
@@ -241,7 +273,7 @@ FT_INTERNAL
 f_status table_geometry(const ft_table_t *table, size_t *height, size_t *width)
 {
     if (table == NULL)
-        return FT_ERROR;
+        return FT_GEN_ERROR;
 
     *height = 0;
     *width = 0;

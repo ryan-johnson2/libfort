@@ -31,7 +31,6 @@ SOFTWARE.
 #include <assert.h>
 #include <string.h>
 #include <wchar.h>
-#include <ctype.h>
 
 #include "vector.h"
 #include "fort_utils.h"
@@ -58,7 +57,14 @@ ft_table_t *ft_create_table(void)
         F_FREE(result);
         return NULL;
     }
-    result->properties = NULL;
+
+    result->properties = create_table_properties();
+    if (result->properties == NULL) {
+        destroy_vector(result->separators);
+        destroy_vector(result->rows);
+        F_FREE(result);
+        return NULL;
+    }
     result->conv_buffer = NULL;
     result->cur_row = 0;
     result->cur_col = 0;
@@ -76,14 +82,14 @@ void ft_destroy_table(ft_table_t *table)
     if (table->rows) {
         size_t row_n = vector_size(table->rows);
         for (i = 0; i < row_n; ++i) {
-            destroy_row(*(f_row_t **)vector_at(table->rows, i));
+            destroy_row(VECTOR_AT(table->rows, i, f_row_t *));
         }
         destroy_vector(table->rows);
     }
     if (table->separators) {
         size_t row_n = vector_size(table->separators);
         for (i = 0; i < row_n; ++i) {
-            destroy_separator(*(f_separator_t **)vector_at(table->separators, i));
+            destroy_separator(VECTOR_AT(table->separators, i, f_separator_t *));
         }
         destroy_vector(table->separators);
     }
@@ -104,7 +110,7 @@ ft_table_t *ft_copy_table(ft_table_t *table)
     size_t i = 0;
     size_t rows_n = vector_size(table->rows);
     for (i = 0; i < rows_n; ++i) {
-        f_row_t *row = *(f_row_t **)vector_at(table->rows, i);
+        f_row_t *row = VECTOR_AT(table->rows, i, f_row_t *);
         f_row_t *new_row = copy_row(row);
         if (new_row == NULL) {
             ft_destroy_table(result);
@@ -115,7 +121,7 @@ ft_table_t *ft_copy_table(ft_table_t *table)
 
     size_t sep_sz = vector_size(table->separators);
     for (i = 0; i < sep_sz; ++i) {
-        f_separator_t *sep = *(f_separator_t **)vector_at(table->separators, i);
+        f_separator_t *sep = VECTOR_AT(table->separators, i, f_separator_t *);
         f_separator_t *new_sep = copy_separator(sep);
         if (new_sep == NULL) {
             ft_destroy_table(result);
@@ -124,7 +130,12 @@ ft_table_t *ft_copy_table(ft_table_t *table)
         vector_push(result->separators, &new_sep);
     }
 
-
+    /* note: by default new table has allocated default properties, so we
+     * have to destroy them first.
+     */
+    if (result->properties) {
+        destroy_table_properties(result->properties);
+    }
     result->properties = copy_table_properties(table->properties);
     if (result->properties == NULL) {
         ft_destroy_table(result);
@@ -138,21 +149,66 @@ ft_table_t *ft_copy_table(ft_table_t *table)
     return result;
 }
 
-
-void ft_ln(ft_table_t *table)
+static int split_cur_row(ft_table_t *table, f_row_t **tail_of_cur_row)
 {
-    assert(table);
-    table->cur_col = 0;
-    table->cur_row++;
+    if (table->cur_row >= vector_size(table->rows)) {
+        tail_of_cur_row = NULL;
+        return 0;
+    }
+
+    f_row_t *row = VECTOR_AT(table->rows, table->cur_row, f_row_t *);
+    if (table->cur_col >= columns_in_row(row)) {
+        tail_of_cur_row = NULL;
+        return 0;
+    }
+
+    f_row_t *tail = split_row(row, table->cur_col);
+    if (!tail) {
+        tail_of_cur_row = NULL;
+        return FT_GEN_ERROR;
+    }
+
+    *tail_of_cur_row = tail;
+    return 0;
 }
 
-size_t ft_cur_row(ft_table_t *table)
+int ft_ln(ft_table_t *table)
+{
+    assert(table);
+    fort_entire_table_properties_t *table_props = &table->properties->entire_table_properties;
+    switch (table_props->add_strategy) {
+        case FT_STRATEGY_INSERT: {
+            f_row_t *new_row = NULL;
+            if (FT_IS_ERROR(split_cur_row(table, &new_row))) {
+                return FT_GEN_ERROR;
+            }
+            if (new_row) {
+                if (FT_IS_ERROR(vector_insert(table->rows, &new_row, table->cur_row + 1))) {
+                    destroy_row(new_row);
+                    return FT_GEN_ERROR;
+                }
+            }
+            break;
+        }
+        case FT_STRATEGY_REPLACE:
+            // do nothing
+            break;
+        default:
+            assert(0 && "Unexpected situation inside libfort");
+            break;
+    }
+    table->cur_col = 0;
+    table->cur_row++;
+    return FT_SUCCESS;
+}
+
+size_t ft_cur_row(const ft_table_t *table)
 {
     assert(table);
     return table->cur_row;
 }
 
-size_t ft_cur_col(ft_table_t *table)
+size_t ft_cur_col(const ft_table_t *table)
 {
     assert(table);
     return table->cur_col;
@@ -164,6 +220,76 @@ void ft_set_cur_cell(ft_table_t *table, size_t row, size_t col)
     table->cur_row = row;
     table->cur_col = col;
 }
+
+int ft_is_empty(const ft_table_t *table)
+{
+    assert(table);
+    return ft_row_count(table) == 0;
+}
+
+size_t ft_row_count(const ft_table_t *table)
+{
+    assert(table && table->rows);
+    return vector_size(table->rows);
+}
+
+int ft_erase_range(ft_table_t *table,
+                   size_t top_left_row, size_t top_left_col,
+                   size_t bottom_right_row, size_t bottom_right_col)
+{
+    assert(table && table->rows);
+    int status = FT_SUCCESS;
+
+    size_t rows_n = vector_size(table->rows);
+
+    if (top_left_row == FT_CUR_ROW)
+        top_left_row = table->cur_row;
+    if (bottom_right_row == FT_CUR_ROW)
+        bottom_right_row = table->cur_row;
+
+    if (top_left_col == FT_CUR_COLUMN)
+        top_left_col = table->cur_row;
+    if (bottom_right_col == FT_CUR_COLUMN)
+        bottom_right_col = table->cur_row;
+
+    if (top_left_row > bottom_right_row || top_left_col > bottom_right_col)
+        return FT_EINVAL;
+
+    f_row_t *row = NULL;
+    size_t i = top_left_row;
+    while (i < rows_n && i <= bottom_right_row) {
+        row = VECTOR_AT(table->rows, i, f_row_t *);
+        status = ft_row_erase_range(row, top_left_col, bottom_right_col);
+        if (FT_IS_ERROR(status))
+            return status;
+        ++i;
+    }
+
+    f_separator_t *separator = NULL;
+
+    size_t n_iterations = MIN(rows_n - 1, bottom_right_row) - top_left_row + 1;
+    size_t j = 0;
+    i = top_left_row;
+    for (j = 0; j < n_iterations; ++j) {
+        row = VECTOR_AT(table->rows, i, f_row_t *);
+        if (columns_in_row(row)) {
+            ++i;
+        } else {
+            destroy_row(row);
+            status = vector_erase(table->rows, i);
+            if (FT_IS_ERROR(status))
+                return status;
+            if (i < vector_size(table->separators)) {
+                separator = VECTOR_AT(table->separators, i, f_separator_t *);
+                destroy_separator(separator);
+                vector_erase(table->separators, i);
+            }
+        }
+    }
+
+    return FT_SUCCESS;
+}
+
 
 static int ft_row_printf_impl_(ft_table_t *table, size_t row, const struct f_string_view *fmt, va_list *va)
 {
@@ -197,8 +323,23 @@ static int ft_row_printf_impl_(ft_table_t *table, size_t row, const struct f_str
     /* todo: clearing pushed items in case of error ?? */
 
     new_cols = columns_in_row(new_row);
-    cur_row_p = (f_row_t **)vector_at(table->rows, row);
-    swap_row(*cur_row_p, new_row, table->cur_col);
+    cur_row_p = &VECTOR_AT(table->rows, row, f_row_t *);
+
+    switch (table->properties->entire_table_properties.add_strategy) {
+        case FT_STRATEGY_INSERT: {
+            if (FT_IS_ERROR(insert_row(*cur_row_p, new_row, table->cur_col)))
+                goto clear;
+            break;
+        }
+        case FT_STRATEGY_REPLACE: {
+            if (FT_IS_ERROR(swap_row(*cur_row_p, new_row, table->cur_col)))
+                goto clear;
+            break;
+        }
+        default:
+            assert(0 && "Unexpected situation inside libfort");
+            break;
+    }
 
     table->cur_col += new_cols;
     destroy_row(new_row);
@@ -297,7 +438,7 @@ static int ft_write_impl_(ft_table_t *table, const f_string_view_t *cell_content
     assert(table);
     f_string_buffer_t *buf = get_cur_str_buffer_and_create_if_not_exists(table);
     if (buf == NULL)
-        return FT_ERROR;
+        return FT_GEN_ERROR;
 
     int status = FT_SUCCESS;
     switch (cell_content->type) {
@@ -315,7 +456,7 @@ static int ft_write_impl_(ft_table_t *table, const f_string_view_t *cell_content
             break;
 #endif
         default:
-            status = FT_ERROR;
+            status = FT_GEN_ERROR;
     }
     if (FT_IS_SUCCESS(status)) {
         table->cur_col++;
@@ -638,8 +779,8 @@ const void *ft_to_string_impl(const ft_table_t *table, enum f_string_type b_type
     }
 
     for (i = 0; i < rows; ++i) {
-        cur_sep = (i < sep_size) ? (*(f_separator_t **)vector_at(table->separators, i)) : NULL;
-        cur_row = *(f_row_t **)vector_at(table->rows, i);
+        cur_sep = (i < sep_size) ? VECTOR_AT(table->separators, i, f_separator_t *) : NULL;
+        cur_row = VECTOR_AT(table->rows, i, f_row_t *);
         enum f_hor_separator_pos separatorPos = (i == 0) ? TOP_SEPARATOR : INSIDE_SEPARATOR;
         context.row = i;
         FT_CHECK(print_row_separator(&cntx, col_vis_width_arr, cols, prev_row, cur_row, separatorPos, cur_sep));
@@ -647,7 +788,7 @@ const void *ft_to_string_impl(const ft_table_t *table, enum f_string_type b_type
         prev_row = cur_row;
     }
     cur_row = NULL;
-    cur_sep = (i < sep_size) ? (*(f_separator_t **)vector_at(table->separators, i)) : NULL;
+    cur_sep = (i < sep_size) ? VECTOR_AT(table->separators, i, f_separator_t *) : NULL;
     context.row = i;
     FT_CHECK(print_row_separator(&cntx, col_vis_width_arr, cols, prev_row, cur_row, BOTTOM_SEPARATOR, cur_sep));
 
@@ -692,14 +833,14 @@ int ft_add_separator(ft_table_t *table)
             return status;
     }
 
-    f_separator_t **sep_p = (f_separator_t **)vector_at(table->separators, table->cur_row);
+    f_separator_t **sep_p = &VECTOR_AT(table->separators, table->cur_row, f_separator_t *);
     if (*sep_p == NULL)
         *sep_p = create_separator(F_TRUE);
     else
         (*sep_p)->enabled = F_TRUE;
 
     if (*sep_p == NULL)
-        return FT_ERROR;
+        return FT_GEN_ERROR;
     return FT_SUCCESS;
 }
 
@@ -837,13 +978,13 @@ int ft_set_cell_prop(ft_table_t *table, size_t row, size_t col, uint32_t propert
     if (table->properties->cell_properties == NULL) {
         table->properties->cell_properties = create_cell_prop_container();
         if (table->properties->cell_properties == NULL) {
-            return FT_ERROR;
+            return FT_GEN_ERROR;
         }
     }
 
     if (row == FT_CUR_ROW)
         row = table->cur_row;
-    if (row == FT_CUR_COLUMN)
+    if (col == FT_CUR_COLUMN)
         col = table->cur_col;
 
     return set_cell_property(table->properties->cell_properties, row, col, property, value);
@@ -877,6 +1018,25 @@ void ft_set_memory_funcs(void *(*f_malloc)(size_t size), void (*f_free)(void *pt
     set_memory_funcs(f_malloc, f_free);
 }
 
+const char *ft_strerror(int error_code)
+{
+    switch (error_code) {
+        case FT_MEMORY_ERROR:
+            return "Out of memory";
+        case FT_GEN_ERROR:
+            return "General error";
+        case FT_EINVAL:
+            return "Invalid argument";
+        case FT_INTERN_ERROR:
+            return "Internal libfort error";
+        default:
+            if (error_code < 0)
+                return "Unknown error code";
+            else
+                return "Success";
+    }
+}
+
 int ft_set_cell_span(ft_table_t *table, size_t row, size_t col, size_t hor_span)
 {
     assert(table);
@@ -890,7 +1050,7 @@ int ft_set_cell_span(ft_table_t *table, size_t row, size_t col, size_t hor_span)
 
     f_row_t *row_p = get_row_and_create_if_not_exists(table, row);
     if (row_p == NULL)
-        return FT_ERROR;
+        return FT_GEN_ERROR;
 
     return row_set_cell_span(row_p, col, hor_span);
 }
@@ -983,4 +1143,10 @@ const void *ft_to_u8string(const ft_table_t *table)
 {
     return (const void *)ft_to_string_impl(table, UTF8_BUF);
 }
+
+void ft_set_u8strwid_func(int (*u8strwid)(const void *beg, const void *end, size_t *width))
+{
+    buffer_set_u8strwid_func(u8strwid);
+}
+
 #endif /* FT_HAVE_UTF8 */

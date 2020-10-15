@@ -5,7 +5,7 @@
 [![Build status](https://ci.appveyor.com/api/projects/status/ll1qygb56pho95xw/branch/master?svg=true)](https://ci.appveyor.com/project/seleznevae/libfort/branch/master)
 [![Build Status](https://cloud.drone.io/api/badges/seleznevae/libfort/status.svg?ref=refs/heads/master)](https://cloud.drone.io/seleznevae/libfort)
 [![Coverage Status](https://coveralls.io/repos/github/seleznevae/libfort/badge.svg?branch=master)](https://coveralls.io/github/seleznevae/libfort?branch=master)
-[![Try online](https://img.shields.io/badge/try-online-blue.svg)](https://wandbox.org/permlink/oHLjXe8WmmKE3B1R)
+[![Try online](https://img.shields.io/badge/try-online-blue.svg)](https://wandbox.org/permlink/h566MmC2bfdsZZDr)
 [![Documentation](https://img.shields.io/badge/docs-doxygen-blue.svg)](http://seleznevae.github.io/libfort)
 [![Doc](https://img.shields.io/badge/doc-wiki-blue.svg)](https://github.com/seleznevae/libfort/wiki)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -28,7 +28,7 @@
 - **Heavy testing.** The goal is to cover 100% of the code (it is not reached yet) and to run tests on all major compilers and platforms.
 
 ## Integration
-Add 2 files ( [`fort.c`](https://github.com/seleznevae/libfort/blob/master/lib/fort.c)  and [`fort.h`](https://github.com/seleznevae/libfort/blob/master/lib/fort.h) from [**lib**](https://github.com/seleznevae/libfort/tree/master/lib) direrctory) to your C or C++ project and include
+Add 2 files ( [`fort.c`](https://github.com/seleznevae/libfort/blob/master/lib/fort.c)  and [`fort.h`](https://github.com/seleznevae/libfort/blob/master/lib/fort.h) from [**lib**](https://github.com/seleznevae/libfort/tree/master/lib) directory) to your C or C++ project and include
 ```C
 #include "fort.h"
 ```
@@ -39,8 +39,25 @@ For C++ projects that use compiler with C++11 support (and later) there are also
 #include "fort.hpp"
 ```
 
+### Integration with cmake
+
+In case **libfort** is installed on the host system it should be sufficient to use `find_package`:
+```cmake
+find_package(libfort)
+target_link_libraries(your_target PRIVATE libfort::fort)
+```
+
+In case you downloaded **libfort** sources and embedded them in your project (e.g. put all sources in directory `third-party/libfort`) you can use `add_subdirectory`:
+```cmake
+# Disable building tests and examples in libfort project
+set(FORT_ENABLE_TESTING OFF CACHE INTERNAL "")
+
+add_subdirectory(third-party/libfort)
+target_link_libraries(your_target PRIVATE fort)
+```
+
 ## Documentation
-See guide on [wiki](https://github.com/seleznevae/libfort/wiki) of the project and doxygen [API documentation](http://seleznevae.github.io/libfort).
+See guide in [tutorial](https://github.com/seleznevae/libfort/blob/develop/docs/tutorial/Tutorial.md) of the library and doxygen [API documentation](http://seleznevae.github.io/libfort).
 
 ## Getting Started
 
@@ -83,7 +100,7 @@ int main(void)
 #include "fort.hpp"
 int main(void)
 {
-    fort::table table;
+    fort::char_table table;
     table << fort::header
         << "N" << "Driver" << "Time" << "Avg Speed" << fort::endr
         << "1" << "Ricciardo" << "1:25.945" << "47.362" << fort::endr
@@ -140,7 +157,7 @@ int main(void)
 #include "fort.hpp"
 int main(void)
 {
-    fort::table table;
+    fort::char_table table;
     /* Change border style */
     table.set_border_style(FT_DOUBLE2_STYLE);
 
@@ -205,7 +222,7 @@ int main(void)
 #include "fort.hpp"
 int main(void)
 {
-    fort::table table;
+    fort::char_table table;
     table << fort::header;
     /* Fill each cell with operator[] */
     table [0][0] = "N";
@@ -239,23 +256,94 @@ Output:
 +---+---------+-------------+----------------+
 ```
 
+### Working with multibyte-character-strings
+`libfort` supports `wchar_t` and utf-8 strings. Here are simple examples of working with utf-8 strings:
+
+
+```C
+/* C API */
+#include <stdio.h>
+#include "fort.h"
+int main(void)
+{
+    ft_table_t *table = ft_create_table();
+    ft_set_border_style(table, FT_NICE_STYLE);
+    ft_set_cell_prop(table, FT_ANY_ROW, 0, FT_CPROP_TEXT_ALIGN, FT_ALIGNED_CENTER);
+    ft_set_cell_prop(table, FT_ANY_ROW, 1, FT_CPROP_TEXT_ALIGN, FT_ALIGNED_LEFT);
+    ft_set_cell_prop(table, 0, FT_ANY_COLUMN, FT_CPROP_ROW_TYPE, FT_ROW_HEADER);
+
+    ft_u8write_ln(table, "Ранг", "Название", "Год", "Рейтинг");
+    ft_u8write_ln(table, "1", "Побег из Шоушенка", "1994", "9.5");
+    ft_u8write_ln(table, "2", "12 разгневанных мужчин", "1957", "8.8");
+    ft_u8write_ln(table, "3", "Космическая одиссея 2001 года", "1968", "8.5");
+    ft_u8write_ln(table, "4", "Бегущий по лезвию", "1982", "8.1");
+
+    printf("%s\n", (const char *)ft_to_u8string(table));
+    ft_destroy_table(table);
+}
+```
+
+```C++
+/* C++ API */
+#include <iostream>
+#include "fort.hpp"
+int main(void)
+{
+    fort::utf8_table table;
+    table.set_border_style(FT_NICE_STYLE);
+    table.column(0).set_cell_text_align(fort::text_align::center);
+    table.column(1).set_cell_text_align(fort::text_align::center);
+
+    table << fort::header
+          << "Ранг" << "Название" << "Год" << "Рейтинг" << fort::endr
+          << "1" << "Побег из Шоушенка" << "1994" << "9.5"<< fort::endr
+          << "2" << "12 разгневанных мужчин" << "1957" << "8.8" << fort::endr
+          << "3" << "Космическая одиссея 2001 года" << "1968" << "8.5" << fort::endr
+          << "4" << "Бегущий по лезвию" << "1982" << "8.1" << fort::endr;
+    std::cout << table.to_string() << std::endl;
+}
+```
+
+Output:
+```text
+╔══════╦═══════════════════════════════╦══════╦═════════╗
+║ Ранг ║           Название            ║ Год  ║ Рейтинг ║
+╠══════╬═══════════════════════════════╬══════╬═════════╣
+║  1   ║       Побег из Шоушенка       ║ 1994 ║ 9.5     ║
+║  2   ║    12 разгневанных мужчин     ║ 1957 ║ 8.8     ║
+║  3   ║ Космическая одиссея 2001 года ║ 1968 ║ 8.5     ║
+║  4   ║       Бегущий по лезвию       ║ 1982 ║ 8.1     ║
+╚══════╩═══════════════════════════════╩══════╩═════════╝
+```
+
+Please note:
+-  `libfort` internally has a very simple logic to compute visible width of utf-8
+strings. It considers that each codepoint will occupy one position on the
+terminal in case of monowidth font (some east asians wide and fullwidth
+characters (see http://www.unicode.org/reports/tr11/tr11-33.html) will occupy
+2 positions). This logic is very simple and covers wide range of cases. But
+obviously there a lot of cases when it is not sufficient. In such cases user
+should use some external libraries and provide an appropriate function to
+`libfort` via `ft_set_u8strwid_func` function.
+
 ## Supported platforms and compilers
 
 The following compilers are currently used in continuous integration at [Travis](https://travis-ci.org/seleznevae/libfort), [AppVeyor](https://ci.appveyor.com/project/seleznevae/libfort) and [Cirrus](https://cirrus-ci.com/github/seleznevae/libfort):
 
 | Compiler           | Operating System             |
 |--------------------|------------------------------|
-| GCC 4.8.4          | Ubuntu 14.04.3               | 
-| GCC 4.9.4          | Ubuntu 14.04.3               | 
-| GCC 5.5.0          | Ubuntu 14.04.3               | 
-| GCC 6.4.0          | Ubuntu 14.04.3               | 
-| GCC 7.3.0          | Ubuntu 14.04.3               | 
-| GCC 8.1.0          | Ubuntu 14.04.3               | 
-| Clang 5.0.0        | Ubuntu 14.04.3               | 
+| GCC 5.5.0          | Ubuntu 16.04.11              |
+| GCC 4.9.4          | Ubuntu 16.04.11              |
+| GCC 5.5.0          | Ubuntu 16.04.11              |
+| GCC 6.5.0          | Ubuntu 16.04.11              |
+| GCC 7.5.0          | Ubuntu 16.04.11              |
+| GCC 8.4.0          | Ubuntu 16.04.11              |
+| GCC 9.3.0          | Ubuntu 16.04.11              |
+| Clang 5.0.0        | Ubuntu 16.04.11              |
 | AppleClang 7.3.0   | Darwin Kernel Version 15.6.0 |
 | AppleClang 8.1.0   | Darwin Kernel Version 16.7.0 |
 | AppleClang 9.1.0   | Darwin Kernel Version 17.4.0 |
-| Clang 6.0.1        | FreeBSD 12.0                 |
+| Clang 8.0.1        | FreeBSD 12.1                 |
 | Visual Studio 2017 | Windows Server 2016          |
 
 
@@ -274,7 +362,7 @@ See the [contribution guidelines](https://github.com/seleznevae/libfort/blob/dev
 
 The class is licensed under the [MIT License](http://opensource.org/licenses/MIT):
 
-Copyright &copy; 2017 - 2019 Seleznev Anton
+Copyright &copy; 2017 - 2020 Seleznev Anton
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 

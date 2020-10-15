@@ -12,16 +12,19 @@ void test_table_geometry(void);
 void test_table_basic(void);
 void test_table_copy(void);
 void test_table_changing_cell(void);
+void test_table_erase(void);
 #ifdef FT_HAVE_WCHAR
 void test_wcs_table_boundaries(void);
 #endif
 void test_table_write(void);
+void test_table_insert_strategy(void);
 void test_table_border_style(void);
 void test_table_builtin_border_styles(void);
 void test_table_cell_properties(void);
 void test_table_text_styles(void);
 void test_table_tbl_properties(void);
 void test_memory_errors(void);
+void test_error_codes(void);
 #ifdef FT_HAVE_UTF8
 void test_utf8_table(void);
 #endif
@@ -49,13 +52,16 @@ struct test_case bb_test_suite [] = {
     {"test_utf8_table", test_utf8_table},
 #endif
     {"test_table_write", test_table_write},
+    {"test_table_insert_strategy", test_table_insert_strategy},
     {"test_table_changing_cell", test_table_changing_cell},
+    {"test_table_erase", test_table_erase},
     {"test_table_border_style", test_table_border_style},
     {"test_table_builtin_border_styles", test_table_builtin_border_styles},
     {"test_table_cell_properties", test_table_cell_properties},
     {"test_table_tbl_properties", test_table_tbl_properties},
     {"test_table_text_styles", test_table_text_styles},
     {"test_memory_errors", test_memory_errors},
+    {"test_error_codes", test_error_codes},
 };
 
 #ifdef FORT_WB_TESTING_ENABLED

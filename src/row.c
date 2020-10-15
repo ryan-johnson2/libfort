@@ -10,19 +10,39 @@ struct f_row {
     f_vector_t *cells;
 };
 
-
-FT_INTERNAL
-f_row_t *create_row(void)
+static
+f_row_t *create_row_impl(f_vector_t *cells)
 {
     f_row_t *row = (f_row_t *)F_CALLOC(1, sizeof(f_row_t));
     if (row == NULL)
         return NULL;
-    row->cells = create_vector(sizeof(f_cell_t *), DEFAULT_VECTOR_CAPACITY);
-    if (row->cells == NULL) {
-        F_FREE(row);
-        return NULL;
+    if (cells) {
+        row->cells = cells;
+    } else {
+        row->cells = create_vector(sizeof(f_cell_t *), DEFAULT_VECTOR_CAPACITY);
+        if (row->cells == NULL) {
+            F_FREE(row);
+            return NULL;
+        }
     }
     return row;
+}
+
+FT_INTERNAL
+f_row_t *create_row(void)
+{
+    return create_row_impl(NULL);
+}
+
+static
+void destroy_each_cell(f_vector_t *cells)
+{
+    size_t i = 0;
+    size_t cells_n = vector_size(cells);
+    for (i = 0; i < cells_n; ++i) {
+        f_cell_t *cell = VECTOR_AT(cells, i, f_cell_t *);
+        destroy_cell(cell);
+    }
 }
 
 FT_INTERNAL
@@ -32,12 +52,7 @@ void destroy_row(f_row_t *row)
         return;
 
     if (row->cells) {
-        size_t i = 0;
-        size_t cells_n = vector_size(row->cells);
-        for (i = 0; i < cells_n; ++i) {
-            f_cell_t *cell = *(f_cell_t **)vector_at(row->cells, i);
-            destroy_cell(cell);
-        }
+        destroy_each_cell(row->cells);
         destroy_vector(row->cells);
     }
 
@@ -55,7 +70,7 @@ f_row_t *copy_row(f_row_t *row)
     size_t i = 0;
     size_t cols_n = vector_size(row->cells);
     for (i = 0; i < cols_n; ++i) {
-        f_cell_t *cell = *(f_cell_t **)vector_at(row->cells, i);
+        f_cell_t *cell = VECTOR_AT(row->cells, i, f_cell_t *);
         f_cell_t *new_cell = copy_cell(cell);
         if (new_cell == NULL) {
             destroy_row(result);
@@ -65,6 +80,44 @@ f_row_t *copy_row(f_row_t *row)
     }
 
     return result;
+}
+
+FT_INTERNAL
+f_row_t *split_row(f_row_t *row, size_t pos)
+{
+    assert(row);
+
+    f_vector_t *cells = vector_split(row->cells, pos);
+    if (!cells)
+        return NULL;
+    f_row_t *tail = create_row_impl(cells);
+    if (!tail) {
+        destroy_each_cell(cells);
+        destroy_vector(cells);
+    }
+    return tail;
+}
+
+FT_INTERNAL
+int ft_row_erase_range(f_row_t *row, size_t left, size_t right)
+{
+    assert(row);
+    size_t cols_n = vector_size(row->cells);
+    if (cols_n == 0 || (right < left))
+        return FT_SUCCESS;
+
+    f_cell_t *cell = NULL;
+    size_t i = left;
+    while (i < cols_n && i <= right) {
+        cell = VECTOR_AT(row->cells, i, f_cell_t *);
+        destroy_cell(cell);
+        ++i;
+    }
+    size_t n_destroy = MIN(cols_n - 1, right) - left + 1;
+    while (n_destroy--) {
+        vector_erase(row->cells, left);
+    }
+    return FT_SUCCESS;
 }
 
 FT_INTERNAL
@@ -87,7 +140,7 @@ f_cell_t *get_cell_impl(f_row_t *row, size_t col, enum f_get_policy policy)
     switch (policy) {
         case DONT_CREATE_ON_NULL:
             if (col < columns_in_row(row)) {
-                return *(f_cell_t **)vector_at(row->cells, col);
+                return VECTOR_AT(row->cells, col, f_cell_t *);
             }
             return NULL;
         case CREATE_ON_NULL:
@@ -100,7 +153,7 @@ f_cell_t *get_cell_impl(f_row_t *row, size_t col, enum f_get_policy policy)
                     return NULL;
                 }
             }
-            return *(f_cell_t **)vector_at(row->cells, col);
+            return VECTOR_AT(row->cells, col, f_cell_t *);
     }
 
     assert(0 && "Shouldn't be here!");
@@ -128,6 +181,23 @@ f_cell_t *get_cell_and_create_if_not_exists(f_row_t *row, size_t col)
     return get_cell_impl(row, col, CREATE_ON_NULL);
 }
 
+FT_INTERNAL
+f_cell_t *create_cell_in_position(f_row_t *row, size_t col)
+{
+    if (row == NULL || row->cells == NULL) {
+        return NULL;
+    }
+
+    f_cell_t *new_cell = create_cell();
+    if (new_cell == NULL)
+        return NULL;
+    if (FT_IS_ERROR(vector_insert(row->cells, &new_cell, col))) {
+        destroy_cell(new_cell);
+        return NULL;
+    }
+    return VECTOR_AT(row->cells, col, f_cell_t *);
+}
+
 
 FT_INTERNAL
 f_status swap_row(f_row_t *cur_row, f_row_t *ins_row, size_t pos)
@@ -144,6 +214,37 @@ f_status swap_row(f_row_t *cur_row, f_row_t *ins_row, size_t pos)
     }
 
     return vector_swap(cur_row->cells, ins_row->cells, pos);
+}
+
+/* Ownership of cells of `ins_row` is passed to `cur_row`. */
+FT_INTERNAL
+f_status insert_row(f_row_t *cur_row, f_row_t *ins_row, size_t pos)
+{
+    assert(cur_row);
+    assert(ins_row);
+
+    while (vector_size(cur_row->cells) < pos) {
+        f_cell_t *new_cell = create_cell();
+        if (!new_cell)
+            return FT_GEN_ERROR;
+        vector_push(cur_row->cells, &new_cell);
+    }
+
+    size_t sz = vector_size(ins_row->cells);
+    size_t i = 0;
+    for (i = 0; i < sz; ++i) {
+        f_cell_t *cell = VECTOR_AT(ins_row->cells, i, f_cell_t *);
+        if (FT_IS_ERROR(vector_insert(cur_row->cells, &cell, pos + i))) {
+            /* clean up what we have inserted */
+            while (i--) {
+                vector_erase(cur_row->cells, pos);
+            }
+            return FT_GEN_ERROR;
+        }
+    }
+    /* Clear cells so that it will be safe to destroy this row */
+    vector_clear(ins_row->cells);
+    return FT_SUCCESS;
 }
 
 
@@ -200,7 +301,7 @@ f_status row_set_cell_span(f_row_t *row, size_t cell_column, size_t hor_span)
 
     f_cell_t *main_cell = get_cell_and_create_if_not_exists(row, cell_column);
     if (main_cell == NULL) {
-        return FT_ERROR;
+        return FT_GEN_ERROR;
     }
     set_cell_type(main_cell, GROUP_MASTER_CELL);
     --hor_span;
@@ -209,7 +310,7 @@ f_status row_set_cell_span(f_row_t *row, size_t cell_column, size_t hor_span)
     while (hor_span) {
         f_cell_t *slave_cell = get_cell_and_create_if_not_exists(row, cell_column);
         if (slave_cell == NULL) {
-            return FT_ERROR;
+            return FT_GEN_ERROR;
         }
         set_cell_type(slave_cell, GROUP_SLAVE_CELL);
         --hor_span;
@@ -228,7 +329,7 @@ int print_row_separator_impl(f_conv_context_t *cntx,
 {
     assert(cntx);
 
-    int status = FT_ERROR;
+    int status = FT_GEN_ERROR;
 
     const f_context_t *context = cntx->cntx;
 
@@ -353,10 +454,14 @@ int print_row_separator_impl(f_conv_context_t *cntx,
     size_t i = 0;
 
     /* If all chars are not printable, skip line separator */
-    if ((strlen(*L) == 0 || (strlen(*L) == 1 && !isprint(**L)))
-        && (strlen(*I) == 0 || (strlen(*I) == 1 && !isprint(**I)))
-        && (strlen(*IV) == 0 || (strlen(*IV) == 1 && !isprint(**IV)))
-        && (strlen(*R) == 0 || (strlen(*R) == 1 && !isprint(**R)))) {
+    /* NOTE: argument of `isprint` should be explicitly converted to
+     * unsigned char according to
+     * https://en.cppreference.com/w/c/string/byte/isprint
+     */
+    if ((strlen(*L) == 0 || (strlen(*L) == 1 && !isprint((unsigned char) **L)))
+        && (strlen(*I) == 0 || (strlen(*I) == 1 && !isprint((unsigned char) **I)))
+        && (strlen(*IV) == 0 || (strlen(*IV) == 1 && !isprint((unsigned char) **IV)))
+        && (strlen(*R) == 0 || (strlen(*R) == 1 && !isprint((unsigned char) **R)))) {
         status = 0;
         goto clear;
     }
@@ -754,7 +859,7 @@ int snprintf_row(const f_row_t *row, f_conv_context_t *cntx, size_t *col_width_a
         while (j < col_width_arr_sz) {
             if (j < cols_in_row) {
                 ((f_context_t *)context)->column = j;
-                f_cell_t *cell = *(f_cell_t **)vector_at(row->cells, j);
+                f_cell_t *cell = VECTOR_AT(row->cells, j, f_cell_t *);
                 size_t cell_vis_width = 0;
 
                 size_t group_slave_sz = group_cell_number(row, j);

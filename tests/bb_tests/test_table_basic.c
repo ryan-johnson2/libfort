@@ -188,6 +188,114 @@ void test_bug_fixes(void)
         ft_destroy_table(table);
     }
 #endif /* FT_HAVE_UTF8 */
+
+    SCENARIO("Issue 37 - https://github.com/seleznevae/libfort/issues/37") {
+        ft_table_t *table = ft_create_table();
+        ft_set_border_style(table, FT_BASIC_STYLE);
+        ft_set_cell_prop(table, 0, FT_ANY_COLUMN, FT_CPROP_ROW_TYPE, FT_ROW_HEADER);
+        ft_write_ln(table, "xxx");
+        ft_write_ln(table,
+                    "1\n2\n3\n4\n5\n6\n7\n8\n9\n0\n1\n2\n3\n4\n5\n6\n7\n8");
+        ft_set_cell_prop(table, 1, 0, FT_CPROP_CONT_FG_COLOR, FT_COLOR_RED);
+
+        const char *table_str = ft_to_string(table);
+        assert_true(table_str != NULL);
+        const char *table_str_etalon =
+            "+-----+\n"
+            "| xxx |\n"
+            "+-----+\n"
+            "| \033[31m1\033[0m   |\n"
+            "| \033[31m2\033[0m   |\n"
+            "| \033[31m3\033[0m   |\n"
+            "| \033[31m4\033[0m   |\n"
+            "| \033[31m5\033[0m   |\n"
+            "| \033[31m6\033[0m   |\n"
+            "| \033[31m7\033[0m   |\n"
+            "| \033[31m8\033[0m   |\n"
+            "| \033[31m9\033[0m   |\n"
+            "| \033[31m0\033[0m   |\n"
+            "| \033[31m1\033[0m   |\n"
+            "| \033[31m2\033[0m   |\n"
+            "| \033[31m3\033[0m   |\n"
+            "| \033[31m4\033[0m   |\n"
+            "| \033[31m5\033[0m   |\n"
+            "| \033[31m6\033[0m   |\n"
+            "| \033[31m7\033[0m   |\n"
+            "| \033[31m8\033[0m   |\n"
+            "+-----+\n";
+        assert_str_equal(table_str, table_str_etalon);
+
+        ft_destroy_table(table);
+    }
+
+    SCENARIO("Issue 37 - https://github.com/seleznevae/libfort/issues/37") {
+        ft_table_t *table = ft_create_table();
+        ft_set_border_style(table, FT_BASIC_STYLE);
+        ft_set_cell_prop(table, 0, FT_ANY_COLUMN, FT_CPROP_ROW_TYPE, FT_ROW_HEADER);
+
+        ft_write_ln(table, "hdr1", "hdr2", "xxx");
+        ft_write_ln(table, "3", "",
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||||||||||||||||||||||||||\n"
+                    "||||||");
+
+        ft_set_cell_prop(table, 1, FT_ANY_COLUMN, FT_CPROP_CONT_FG_COLOR, FT_COLOR_RED);
+        const char *table_str = ft_to_string(table);
+        assert_true(table_str != NULL);
+
+        const char *table_str_etalon =
+            "+------+------+--------------------------------+\n"
+            "| hdr1 | hdr2 | xxx                            |\n"
+            "+------+------+--------------------------------+\n"
+            "| \033[31m3\033[0m    |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||||||||||||||||||||||||||\033[0m |\n"
+            "|\033[31m\033[0m      |\033[31m\033[0m      | \033[31m||||||\033[0m                         |\n"
+            "+------+------+--------------------------------+\n";
+        assert_str_equal(table_str, table_str_etalon);
+        ft_destroy_table(table);
+    }
 }
 
 void test_table_basic(void)
@@ -197,6 +305,8 @@ void test_table_basic(void)
     WHEN("Empty table") {
         table = ft_create_table();
         assert_true(table != NULL);
+        assert_true(ft_is_empty(table) == 1);
+        assert_true(ft_row_count(table) == 0);
 
         const char *table_str = ft_to_string(table);
         assert_true(table_str != NULL);
@@ -213,6 +323,28 @@ void test_table_basic(void)
         assert_true(table_str != NULL);
         assert_str_equal(table_str, table_str_etalon);
 #endif /* FT_HAVE_UTF8 */
+
+        ft_set_cur_cell(table, 5, 6);
+        assert_true(ft_is_empty(table) == 1);
+        assert_true(ft_row_count(table) == 0);
+        ft_destroy_table(table);
+    }
+
+    WHEN("Empty string content") {
+        table = ft_create_table();
+        assert_true(table != NULL);
+        assert_true(ft_is_empty(table) == 1);
+        assert_true(ft_write_ln(table, "") == FT_SUCCESS);
+        assert_true(ft_is_empty(table) == 0);
+        assert_true(ft_row_count(table) == 1);
+
+        const char *table_str = ft_to_string(table);
+        const char *table_str_etalon =
+            "+--+\n"
+            "|  |\n"
+            "+--+\n";
+        assert_str_equal(table_str, table_str_etalon);
+
         ft_destroy_table(table);
     }
 
@@ -225,6 +357,8 @@ void test_table_basic(void)
         assert_true(ft_write_ln(table, "3", "c", "234", "3.140000") == FT_SUCCESS);
         assert_true(ft_write_ln(table, "3", "c", "234", "3.140000") == FT_SUCCESS);
         assert_true(ft_write_ln(table, "3", "c", "234", "3.140000") == FT_SUCCESS);
+        assert_true(ft_is_empty(table) == 0);
+        assert_true(ft_row_count(table) == 3);
 
         const char *table_str = ft_to_string(table);
         assert_true(table_str != NULL);
@@ -1586,8 +1720,95 @@ void test_table_write(void)
     }
 #endif
 
+    SCENARIO("Test write and printf functions simultaneously") {
+        table = ft_create_table();
+        assert_true(table != NULL);
+        assert_true(FT_IS_SUCCESS(ft_write(table, "0", "1")));
+        assert_true(FT_IS_SUCCESS(ft_printf(table, "2|3")));
+        assert_true(FT_IS_SUCCESS(ft_write(table, "5", "6")));
+
+        const char *table_str = ft_to_string(table);
+        assert_true(table_str != NULL);
+        const char *table_str_etalon =
+            "+---+---+---+---+---+---+\n"
+            "| 0 | 1 | 2 | 3 | 5 | 6 |\n"
+            "+---+---+---+---+---+---+\n";
+        assert_str_equal(table_str, table_str_etalon);
+
+        ft_destroy_table(table);
+    }
 }
 
+void test_table_insert_strategy(void)
+{
+    SCENARIO("Test ft_ln") {
+        ft_table_t *table = ft_create_table();
+        assert_true(table != NULL);
+        ft_set_tbl_prop(table, FT_TPROP_ADDING_STRATEGY, FT_STRATEGY_INSERT);
+        assert_true(FT_IS_SUCCESS(ft_write_ln(table, "0", "1", "2")));
+        ft_set_cur_cell(table, 0, 2);
+        assert_true(FT_IS_SUCCESS(ft_ln(table)));
+        ft_set_cur_cell(table, 1, 1);
+        assert_true(FT_IS_SUCCESS(ft_write(table, "3")));
+
+        const char *table_str = ft_to_string(table);
+        assert_true(table_str != NULL);
+        const char *table_str_etalon =
+            "+---+---+\n"
+            "| 0 | 1 |\n"
+            "| 2 | 3 |\n"
+            "+---+---+\n";
+        assert_str_equal(table_str, table_str_etalon);
+
+        ft_destroy_table(table);
+    }
+
+    SCENARIO("Test write functions") {
+        ft_table_t *table = ft_create_table();
+        assert_true(table != NULL);
+        ft_set_tbl_prop(table, FT_TPROP_ADDING_STRATEGY, FT_STRATEGY_INSERT);
+        assert_true(FT_IS_SUCCESS(ft_write_ln(table, "0", "1", "2", "4", "5")));
+        ft_set_cur_cell(table, 0, 2);
+        assert_true(FT_IS_SUCCESS(ft_ln(table)));
+        ft_set_cur_cell(table, 1, 1);
+        assert_true(FT_IS_SUCCESS(ft_write_ln(table, "3")));
+
+        const char *table_str = ft_to_string(table);
+        assert_true(table_str != NULL);
+        const char *table_str_etalon =
+            "+---+---+\n"
+            "| 0 | 1 |\n"
+            "| 2 | 3 |\n"
+            "| 4 | 5 |\n"
+            "+---+---+\n";
+        assert_str_equal(table_str, table_str_etalon);
+
+        ft_destroy_table(table);
+    }
+
+    SCENARIO("Test printf functions") {
+        ft_table_t *table = ft_create_table();
+        assert_true(table != NULL);
+        ft_set_tbl_prop(table, FT_TPROP_ADDING_STRATEGY, FT_STRATEGY_INSERT);
+        assert_true(FT_IS_SUCCESS(ft_write_ln(table, "0", "1", "2", "5", "6")));
+        ft_set_cur_cell(table, 0, 2);
+        assert_true(FT_IS_SUCCESS(ft_ln(table)));
+        ft_set_cur_cell(table, 1, 1);
+        assert_true(FT_IS_SUCCESS(ft_printf_ln(table, "3|4")));
+
+        const char *table_str = ft_to_string(table);
+        assert_true(table_str != NULL);
+        const char *table_str_etalon =
+            "+---+---+---+\n"
+            "| 0 | 1 |   |\n"
+            "| 2 | 3 | 4 |\n"
+            "| 5 | 6 |   |\n"
+            "+---+---+---+\n";
+        assert_str_equal(table_str, table_str_etalon);
+
+        ft_destroy_table(table);
+    }
+}
 
 void test_table_copy(void)
 {
@@ -1694,4 +1915,159 @@ void test_table_changing_cell(void)
         assert_str_equal(table_str, table_str_etalon);
         ft_destroy_table(table);
     }
+}
+
+static struct ft_table *create_test_table()
+{
+    ft_table_t *table = ft_create_table();
+    assert_true(table != NULL);
+    ft_set_cell_prop(table, FT_ANY_ROW, FT_ANY_COLUMN, FT_CPROP_BOTTOM_PADDING, 0);
+    ft_set_cell_prop(table, FT_ANY_ROW, FT_ANY_COLUMN, FT_CPROP_TOP_PADDING, 0);
+
+    ft_write_ln(table, "00", "01", "02");
+    ft_write_ln(table, "10", "11", "12");
+    ft_write_ln(table, "20", "21", "22");
+
+    return table;
+}
+
+void test_table_erase(void)
+{
+    WHEN("Invalid arguments") {
+        ft_table_t *table = create_test_table();
+
+        // invalid rows
+        assert_true(ft_erase_range(table, 1, 1, 0, 2) == FT_EINVAL);
+
+        // invalid colums
+        assert_true(ft_erase_range(table, 1, 1, 2, 0) == FT_EINVAL);
+
+        ft_destroy_table(table);
+    }
+
+    WHEN("Erase one cell") {
+        ft_table_t *table = create_test_table();
+        assert_true(FT_IS_SUCCESS(ft_erase_range(table, 1, 1, 1, 1)));
+
+        const char *table_str = ft_to_string(table);
+        assert_true(table_str != NULL);
+        const char *table_str_etalon =
+            "+----+----+----+\n"
+            "| 00 | 01 | 02 |\n"
+            "| 10 | 12 |    |\n"
+            "| 20 | 21 | 22 |\n"
+            "+----+----+----+\n";
+        assert_str_equal(table_str, table_str_etalon);
+        ft_destroy_table(table);
+    }
+
+    WHEN("Erase one last cell") {
+        ft_table_t *table = create_test_table();
+        ft_write_ln(table, "30");
+        assert_true(FT_IS_SUCCESS(ft_erase_range(table, 3, 0, 3, 0)));
+
+        const char *table_str = ft_to_string(table);
+        assert_true(table_str != NULL);
+        const char *table_str_etalon =
+            "+----+----+----+\n"
+            "| 00 | 01 | 02 |\n"
+            "| 10 | 11 | 12 |\n"
+            "| 20 | 21 | 22 |\n"
+            "+----+----+----+\n";
+        assert_str_equal(table_str, table_str_etalon);
+        ft_destroy_table(table);
+    }
+
+    WHEN("Erase row") {
+        ft_table_t *table = create_test_table();
+        assert_true(FT_IS_SUCCESS(ft_erase_range(table, 1, 0, 1, 999)));
+
+        const char *table_str = ft_to_string(table);
+        assert_true(table_str != NULL);
+        const char *table_str_etalon =
+            "+----+----+----+\n"
+            "| 00 | 01 | 02 |\n"
+            "| 20 | 21 | 22 |\n"
+            "+----+----+----+\n";
+        assert_str_equal(table_str, table_str_etalon);
+        ft_destroy_table(table);
+    }
+
+    WHEN("Erase last row") {
+        ft_table_t *table = create_test_table();
+        assert_true(FT_IS_SUCCESS(ft_erase_range(table, 2, 0, 2, 999)));
+
+        const char *table_str = ft_to_string(table);
+        assert_true(table_str != NULL);
+        const char *table_str_etalon =
+            "+----+----+----+\n"
+            "| 00 | 01 | 02 |\n"
+            "| 10 | 11 | 12 |\n"
+            "+----+----+----+\n";
+        assert_str_equal(table_str, table_str_etalon);
+        ft_destroy_table(table);
+    }
+
+    WHEN("Erase column") {
+        ft_table_t *table = create_test_table();
+        assert_true(FT_IS_SUCCESS(ft_erase_range(table, 0, 1, 999, 1)));
+
+        const char *table_str = ft_to_string(table);
+        assert_true(table_str != NULL);
+        const char *table_str_etalon =
+            "+----+----+\n"
+            "| 00 | 02 |\n"
+            "| 10 | 12 |\n"
+            "| 20 | 22 |\n"
+            "+----+----+\n";
+        assert_str_equal(table_str, table_str_etalon);
+        ft_destroy_table(table);
+    }
+
+    WHEN("Erase last column") {
+        ft_table_t *table = create_test_table();
+        assert_true(FT_IS_SUCCESS(ft_erase_range(table, 0, 2, 999, 2)));
+
+        const char *table_str = ft_to_string(table);
+        assert_true(table_str != NULL);
+        const char *table_str_etalon =
+            "+----+----+\n"
+            "| 00 | 01 |\n"
+            "| 10 | 11 |\n"
+            "| 20 | 21 |\n"
+            "+----+----+\n";
+        assert_str_equal(table_str, table_str_etalon);
+        ft_destroy_table(table);
+    }
+
+    WHEN("Erasion lines with separators") {
+        ft_table_t *table = ft_create_table();
+        assert_true(table != NULL);
+        ft_set_cell_prop(table, FT_ANY_ROW, FT_ANY_COLUMN, FT_CPROP_BOTTOM_PADDING, 0);
+        ft_set_cell_prop(table, FT_ANY_ROW, FT_ANY_COLUMN, FT_CPROP_TOP_PADDING, 0);
+
+        ft_write_ln(table, "00", "01", "02");
+        ft_write_ln(table, "10", "11", "12");
+        ft_add_separator(table);
+        ft_write_ln(table, "20", "21", "22");
+        ft_write_ln(table, "30", "31", "32");
+        ft_add_separator(table);
+        ft_write_ln(table, "40", "41", "42");
+
+        assert_true(FT_IS_SUCCESS(ft_erase_range(table, 1, 0, 2, 9999)));
+
+        const char *table_str = ft_to_string(table);
+        assert_true(table_str != NULL);
+        const char *table_str_etalon =
+            "+----+----+----+\n"
+            "| 00 | 01 | 02 |\n"
+            "| 30 | 31 | 32 |\n"
+            "+----+----+----+\n"
+            "| 40 | 41 | 42 |\n"
+            "+----+----+----+\n";
+        assert_str_equal(table_str, table_str_etalon);
+        ft_destroy_table(table);
+    }
+
+
 }

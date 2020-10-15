@@ -330,7 +330,7 @@ const f_cell_props_t *cget_cell_prop(const f_cell_prop_container_t *cont, size_t
     size_t sz = vector_size(cont);
     size_t i = 0;
     for (i = 0; i < sz; ++i) {
-        const f_cell_props_t *opt = (const f_cell_props_t *)vector_at_c(cont, i);
+        const f_cell_props_t *opt = &VECTOR_AT_C(cont, i, const f_cell_props_t);
         if (opt->cell_row == row && opt->cell_col == col)
             return opt;
     }
@@ -345,7 +345,7 @@ f_cell_props_t *get_cell_prop_and_create_if_not_exists(f_cell_prop_container_t *
     size_t sz = vector_size(cont);
     size_t i = 0;
     for (i = 0; i < sz; ++i) {
-        f_cell_props_t *opt = (f_cell_props_t *)vector_at(cont, i);
+        f_cell_props_t *opt = &VECTOR_AT(cont, i, f_cell_props_t);
         if (opt->cell_row == row && opt->cell_col == col)
             return opt;
     }
@@ -359,7 +359,7 @@ f_cell_props_t *get_cell_prop_and_create_if_not_exists(f_cell_prop_container_t *
     opt.cell_row = row;
     opt.cell_col = col;
     if (FT_IS_SUCCESS(vector_push(cont, &opt))) {
-        return (f_cell_props_t *)vector_at(cont, sz);
+        return &VECTOR_AT(cont, sz, f_cell_props_t);
     }
 
     return NULL;
@@ -462,7 +462,7 @@ f_status set_cell_property(f_cell_prop_container_t *cont, size_t row, size_t col
 {
     f_cell_props_t *opt = get_cell_prop_and_create_if_not_exists(cont, row, col);
     if (opt == NULL)
-        return FT_ERROR;
+        return FT_GEN_ERROR;
 
     return set_cell_property_impl(opt, property, value);
     /*
@@ -660,7 +660,7 @@ f_status set_default_cell_property(uint32_t property, int value)
      "┌", "─", "┬", "┐",          \
      "│", "│", "│",               \
      "", "", "", "",              \
-     "└", "─", "┴", "╯",          \
+     "└", "─", "┴", "┘",          \
      "│", "─", "│", "─",          \
     },                            \
     /* header_border_chars */     \
@@ -874,6 +874,7 @@ fort_entire_table_properties_t g_entire_table_properties = {
     0, /* top_margin */
     0, /* right_margin */
     0, /* bottom_margin */
+    FT_STRATEGY_REPLACE, /* add_strategy */
 };
 
 static f_status set_entire_table_property_internal(fort_entire_table_properties_t *properties, uint32_t property, int value)
@@ -888,6 +889,8 @@ static f_status set_entire_table_property_internal(fort_entire_table_properties_
         properties->right_margin = value;
     } else if (PROP_IS_SET(property, FT_TPROP_BOTTOM_MARGIN)) {
         properties->bottom_margin = value;
+    } else if (PROP_IS_SET(property, FT_TPROP_ADDING_STRATEGY)) {
+        properties->add_strategy = (enum ft_adding_strategy)value;
     } else {
         return FT_EINVAL;
     }
@@ -943,7 +946,8 @@ f_table_properties_t g_table_properties = {
         0, /* left_margin */
         0, /* top_margin */
         0, /* right_margin */
-        0  /* bottom_margin */
+        0,  /* bottom_margin */
+        FT_STRATEGY_REPLACE, /* add_strategy */
     }
 };
 

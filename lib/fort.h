@@ -3,7 +3,7 @@ libfort
 
 MIT License
 
-Copyright (c) 2017 - 2019 Seleznev Anton
+Copyright (c) 2017 - 2020 Seleznev Anton
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -45,9 +45,9 @@ SOFTWARE.
  *****************************************************************************/
 
 #define LIBFORT_MAJOR_VERSION 0
-#define LIBFORT_MINOR_VERSION 2
-#define LIBFORT_REVISION 3
-#define LIBFORT_VERSION_STR "0.2.3"
+#define LIBFORT_MINOR_VERSION 4
+#define LIBFORT_REVISION 2
+#define LIBFORT_VERSION_STR "0.4.2"
 
 
 /*****************************************************************************
@@ -56,7 +56,7 @@ SOFTWARE.
 
 /**
  * libfort configuration macros
- * (to disable wchar_t/utf-8 support this macros should be defined)
+ * (to disable wchar_t/UTF-8 support this macros should be defined)
  */
 /** #define FT_CONGIG_DISABLE_WCHAR */
 /** #define FT_CONGIG_DISABLE_UTF8 */
@@ -73,10 +73,40 @@ SOFTWARE.
 /*****************************************************************************
  *               RETURN CODES
  *****************************************************************************/
+
+/**
+ * Operation successfully ended.
+ */
 #define FT_SUCCESS        0
-#define FT_MEMORY_ERROR   -1
-#define FT_ERROR          -2
-#define FT_EINVAL         -3
+
+/**
+ * Memory allocation failed.
+ */
+#define FT_MEMORY_ERROR  -1
+
+/**
+ * Invalid argument.
+ */
+#define FT_EINVAL        -2
+
+/**
+ *  Libfort internal logic error.
+ *
+ *  Usually such errors mean that something is wrong in
+ *  libfort internal logic and in most of cases cause of
+ *  these errors is a library bug.
+ */
+#define FT_INTERN_ERROR  -3
+
+/**
+ * General error.
+ *
+ * Different errors that do not belong to the group of errors
+ * mentioned above.
+ */
+#define FT_GEN_ERROR     -4
+
+
 #define FT_IS_SUCCESS(arg) ((arg) >= 0)
 #define FT_IS_ERROR(arg) ((arg) < 0)
 
@@ -275,8 +305,14 @@ ft_table_t *ft_copy_table(ft_table_t *table);
  *
  * @param table
  *   Pointer to formatted table.
+ * @return
+ *   - 0: Success; data were written
+ *   - (<0): In case of error.
+ * @note
+ *   This function can fail only in case FT_STRATEGY_INSERT adding strategy
+ *   was set for the table.
  */
-void ft_ln(ft_table_t *table);
+int ft_ln(ft_table_t *table);
 
 /**
  * Get row number of the current cell.
@@ -286,7 +322,7 @@ void ft_ln(ft_table_t *table);
  * @return
  *   Row number of the current cell.
  */
-size_t ft_cur_row(ft_table_t *table);
+size_t ft_cur_row(const ft_table_t *table);
 
 /**
  * Get column number of the current cell.
@@ -296,7 +332,7 @@ size_t ft_cur_row(ft_table_t *table);
  * @return
  *   Column number of the current cell.
  */
-size_t ft_cur_col(ft_table_t *table);
+size_t ft_cur_col(const ft_table_t *table);
 
 /**
  * Set current cell position.
@@ -313,7 +349,50 @@ size_t ft_cur_col(ft_table_t *table);
  */
 void ft_set_cur_cell(ft_table_t *table, size_t row, size_t col);
 
+/**
+ * Check if table is empty.
+ *
+ * @param table
+ *   Pointer to  the table.
+ * @return
+ *   1 - table is empty
+ *   0 - some data has been inserted
+ */
+int ft_is_empty(const ft_table_t *table);
 
+/**
+ * Get number of rows in the table.
+ *
+ * @param table
+ *   Pointer to formatted table.
+ * @return
+ *   Number of rows in the table.
+ */
+size_t ft_row_count(const ft_table_t *table);
+
+/**
+ *  Erase range of cells.
+ *
+ *  Range of cells is determined by 2 points (top-left and bottom-right) (both
+ *  ends are included).
+ *
+ * @param table
+ *   Pointer to formatted table.
+ * @param top_left_row
+ *   Row number of the top left cell in the range.
+ * @param top_left_col
+ *   Column number of the top left cell in the range.
+ * @param bottom_right_row
+ *   Row number of the bottom right cell in the range.
+ * @param bottom_right_col
+ *   Column number of the bottom right cell in the range.
+ * @return
+ *   - 0 - Operation was successfully implemented
+ *   - (<0): In case of error
+ */
+int ft_erase_range(ft_table_t *table,
+                   size_t top_left_row, size_t top_left_col,
+                   size_t bottom_right_row, size_t bottom_right_col);
 
 #if defined(FT_CLANG_COMPILER) || defined(FT_GCC_COMPILER)
 
@@ -689,6 +768,8 @@ int ft_set_border_style(ft_table_t *table, const struct ft_border_style *style);
 #define FT_CUR_ROW    (UINT_MAX - 1) /**< Current row */
 /** @} */
 
+#define FT_MAX_ROW_INDEX (UINT_MAX - 2)
+#define FT_MAX_COL_INDEX (UINT_MAX - 2)
 
 
 /**
@@ -803,12 +884,23 @@ int ft_set_cell_prop(ft_table_t *table, size_t row, size_t col, uint32_t propert
  * @name Table properties identifiers.
  * @{
  */
-#define FT_TPROP_LEFT_MARGIN   (0x01U << 0)
-#define FT_TPROP_TOP_MARGIN    (0x01U << 1)
-#define FT_TPROP_RIGHT_MARGIN  (0x01U << 2)
-#define FT_TPROP_BOTTOM_MARGIN (0x01U << 3)
+#define FT_TPROP_LEFT_MARGIN     (0x01U << 0)
+#define FT_TPROP_TOP_MARGIN      (0x01U << 1)
+#define FT_TPROP_RIGHT_MARGIN    (0x01U << 2)
+#define FT_TPROP_BOTTOM_MARGIN   (0x01U << 3)
+#define FT_TPROP_ADDING_STRATEGY (0x01U << 4)
 /** @} */
 
+/**
+ * Adding strategy.
+ *
+ * Determines what happens with old content if current cell is not empty after
+ * adding data to it. Default strategy is FT_STRATEGY_REPLACE.
+ */
+enum ft_adding_strategy {
+    FT_STRATEGY_REPLACE = 0,  /**< Replace old content. */
+    FT_STRATEGY_INSERT        /**< Insert new conten. Old content is shifted. */
+};
 
 
 /**
@@ -875,6 +967,16 @@ int ft_set_cell_span(ft_table_t *table, size_t row, size_t col, size_t hor_span)
 void ft_set_memory_funcs(void *(*f_malloc)(size_t size), void (*f_free)(void *ptr));
 
 
+/**
+ * Return string describing the `error_code`.
+ *
+ * @param error_code
+ *   Error code returned by the library.
+ * @return
+ *   String describing the error.
+ */
+const char *ft_strerror(int error_code);
+
 
 
 #ifdef FT_HAVE_WCHAR
@@ -914,6 +1016,27 @@ int ft_u8printf(ft_table_t *table, const char *fmt, ...) FT_PRINTF_ATTRIBUTE_FOR
 int ft_u8printf_ln(ft_table_t *table, const char *fmt, ...) FT_PRINTF_ATTRIBUTE_FORMAT(2, 3);
 
 const void *ft_to_u8string(const ft_table_t *table);
+
+/**
+ * Set custom function to compute visible width of UTF-8 string.
+ *
+ * libfort internally has a very simple logic to compute visible width of UTF-8
+ * strings. It considers that each codepoint will occupy one position on the
+ * terminal in case of monowidth font (some east asians wide and fullwidth
+ * characters (see http://www.unicode.org/reports/tr11/tr11-33.html) will occupy
+ * 2 positions). This logic is very simple and covers wide range of cases. But
+ * obviously there a lot of cases when it is not sufficient. In such cases user
+ * should use some external libraries and provide an appropriate function to
+ * libfort.
+ *
+ * @param u8strwid
+ *   User provided function to evaluate width of UTF-8 string ( beg - start of
+ *   UTF-8 string, end - end of UTF-8 string (not included), width - pointer to
+ *   the result). If function succeed it should return 0, otherwise some non-
+ *   zero value. If function returns nonzero value libfort fallbacks to default
+ *   internal algorithm.
+ */
+void ft_set_u8strwid_func(int (*u8strwid)(const void *beg, const void *end, size_t *width));
 
 #endif /* FT_HAVE_UTF8 */
 

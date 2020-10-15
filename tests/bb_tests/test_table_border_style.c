@@ -560,7 +560,7 @@ void test_table_builtin_border_styles(void)
         "├──────┼──────────────────────────┼──────┼────────┤\n"
         "│  4   │ 2001: A Space Odyssey    │ 1968 │    8.5 │\n"
         "│  5   │ Blade Runner             │ 1982 │    8.1 │\n"
-        "└──────┴──────────────────────────┴──────┴────────╯\n";
+        "└──────┴──────────────────────────┴──────┴────────┘\n";
     assert_str_equal(table_str, table_str_etalon);
     ft_destroy_table(table);
 
@@ -630,7 +630,7 @@ void test_table_builtin_border_styles(void)
     assert_str_equal(table_str, table_str_etalon);
     ft_destroy_table(table);
 
-#if defined(FT_HAVE_WCHAR) && !defined(FT_MICROSOFT_COMPILER)
+#if defined(FT_HAVE_WCHAR) && !defined(FT_MICROSOFT_COMPILER) && !defined(_WIN32)
     ft_set_default_border_style(FT_DOUBLE2_STYLE);
     table = create_basic_wtable();
     table_wstr = ft_to_wstring(table);

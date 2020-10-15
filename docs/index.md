@@ -27,6 +27,9 @@ These pages contain the API documentation of **libfort** - simple library to cre
         - @link ft_table_write_ln ft_table_write_ln @endlink -- fill cells with the strings from the 2D array and move to the next line
         - @link ft_add_separator ft_add_separator @endlink -- add horizontal separator
 
+    - Remove content
+        - @link ft_erase_range ft_erase_range @endlink -- erase range of cells
+
     - Modify appearance of the table
         - @link ft_set_default_border_style ft_set_default_border_style @endlink -- set default border style for all new created tables
         - @link ft_set_border_style ft_set_border_style @endlink -- modify border style of the table
@@ -39,6 +42,9 @@ These pages contain the API documentation of **libfort** - simple library to cre
     - Others
         - @link ft_set_memory_funcs ft_set_memory_funcs @endlink -- set memory allocation functions for the library
         - @link ft_set_default_printf_field_separator ft_set_default_printf_field_separator @endlink -- Set field separator for ft_printf, ft_printf_ln
+        - @link ft_is_empty ft_is_empty @endlink -- check if table is empty
+        - @link ft_row_count ft_row_count @endlink -- get number of rows in the table
+        - @link ft_strerror ft_strerror @endlink -- get string describing the error code
 
   - Data structures and types
     - @link ft_table_t ft_table_t @endlink -- table handler
@@ -74,6 +80,8 @@ These pages contain the API documentation of **libfort** - simple library to cre
         - @link fort::table::cell cell @endlink -- get cell
         - @link fort::table::row row @endlink -- get row
         - @link fort::table::column column @endlink -- get column
+        - @link fort::table::is_empty is_empty @endlink -- check if table is empty
+        - @link fort::table::row_count row_count @endlink -- get number of rows in the table
 
   - @link fort::property_owner fort::property_owner @endlink -- base class for all objects (table, row, column, cell) for which user can specify properties
     - Modify appearance
